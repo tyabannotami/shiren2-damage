@@ -112,8 +112,8 @@
         const baseInput = Number(document.getElementById('base').value);
         const defInput = Number(document.getElementById('def').value);
 
-        const base = parseInput(baseInput, { min: 0, max: 1000, name: 'base' });
-        const def = parseInput(defInput, { min: 0, max: 511, name: 'def' });
+        const base = parseInput(baseInput, { min: 0, max:9999, name: 'base' });
+        const def = parseInput(defInput, { min: 0, max:9999, name: 'def' });
 
         const result = buildDistribution(base, def);
         renderResult(result);

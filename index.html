@@ -3,24 +3,24 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>シレン2（N64）敵から受けるダメージ計算機（直入力版）</title>
+  <title>シレン2被ダメージ計算機</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <main class="container">
-    <h1>シレン2（N64）敵から受けるダメージ計算機（直入力版）</h1>
+    <h1>シレン2被ダメージ計算機</h1>
 
     <section class="panel">
       <form id="calc-form" class="form-grid">
-        <label for="base">base（敵攻撃基礎値）</label>
+        <label for="base">攻撃力</label>
         <input id="base" name="base" type="number" min="0" max="1000" step="1" required value="50" />
 
-        <label for="def">def（守備力）</label>
+        <label for="def">守備力</label>
         <input id="def" name="def" type="number" min="0" max="511" step="1" required value="20" />
 
         <button type="submit">計算</button>
       </form>
-      <p class="note">※ 計算量の都合で base は 0〜1000、def は 0〜511 に制限しています。</p>
+      <p class="note">※ 計算量の都合で 攻撃力 は 0〜500、def は 0〜500 に制限しています。</p>
       <p id="error" class="error" role="alert" aria-live="polite"></p>
     </section>
 
@@ -37,9 +37,8 @@
         <table>
           <thead>
             <tr>
-              <th>damage</th>
-              <th>probability%</th>
-              <th>cumulative%</th>
+              <th>ダメージ</th>
+              <th>確率</th>
             </tr>
           </thead>
           <tbody id="dist-body"></tbody>
