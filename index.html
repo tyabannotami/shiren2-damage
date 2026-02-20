@@ -3,10 +3,51 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>シレン2 被ダメ計算機</title>
+  <title>シレン2（N64）敵から受けるダメージ計算機（直入力版）</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1>シレン2 被ダメ計算機</h1>
-  <p>公開テスト中（index.html）</p>
+  <main class="container">
+    <h1>シレン2（N64）敵から受けるダメージ計算機（直入力版）</h1>
+
+    <section class="panel">
+      <form id="calc-form" class="form-grid">
+        <label for="base">base（敵攻撃基礎値）</label>
+        <input id="base" name="base" type="number" min="0" max="1000" step="1" required value="50" />
+
+        <label for="def">def（守備力）</label>
+        <input id="def" name="def" type="number" min="0" max="511" step="1" required value="20" />
+
+        <button type="submit">計算</button>
+      </form>
+      <p class="note">※ 計算量の都合で base は 0〜1000、def は 0〜511 に制限しています。</p>
+      <p id="error" class="error" role="alert" aria-live="polite"></p>
+    </section>
+
+    <section class="panel" id="result-panel" hidden>
+      <h2>計算結果</h2>
+      <dl class="summary">
+        <dt>平均</dt>
+        <dd id="avg"></dd>
+        <dt>最小 / 最大</dt>
+        <dd id="minmax"></dd>
+      </dl>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>damage</th>
+              <th>probability%</th>
+              <th>cumulative%</th>
+            </tr>
+          </thead>
+          <tbody id="dist-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="calc.js"></script>
 </body>
 </html>
