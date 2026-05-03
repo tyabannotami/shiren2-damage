@@ -1,0 +1,36 @@
+﻿<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>calc logic tests</title>
+  <style>
+    body { font-family: sans-serif; margin: 24px; }
+    .pass { color: #0a7a22; }
+    .fail { color: #b00020; }
+    pre { background: #f6f8fa; padding: 12px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Calc Logic Tests</h1>
+  <p>This page runs minimal browser checks for <code>calc.js</code>.</p>
+
+  <!-- Minimal dummy DOM required by calc.js bindUI. -->
+  <form id="calc-form">
+    <input id="base" type="number" value="50" />
+    <input id="def" type="number" value="20" />
+    <button type="submit">run</button>
+  </form>
+  <p id="error"></p>
+  <section id="result-panel" hidden>
+    <span id="avg"></span>
+    <span id="minmax"></span>
+    <table><tbody id="dist-body"></tbody></table>
+  </section>
+
+  <pre id="log"></pre>
+
+  <script src="../calc.js"></script>
+  <script src="./calc.logic.test.js"></script>
+</body>
+</html>
