@@ -3,23 +3,32 @@
   const DEF_COEFF_Q16 = [0xF8E4, 0xF1FA, 0xE4B8, 0xCC58, 0xA31D, 0x67EE, 0x2A31, 0x06F4, 0x0030];
 
   /**
-   * �h��␳��Q16�Œ菬���œK�p��������֐��B
-   * ���i�K�͊����d�l�ێ����ړI�Ȃ̂ŁA�����͕ύX���Ȃ��B
+   * docs/shiren2_damage_formula.md の ApplyDefense_Q16 相当処理。
+   * defense を2進数ビットに分解し、立っているビットだけ Q16 係数を掛ける。
+   * 係数を掛ける直前に aQ16 >> 16 相当で整数化する点が実機式の肝。
    */
   function applyDefenseQ16(base, def) {
     let aQ16 = base * Q16;
+    let d = def;
+
     for (let i = 0; i < DEF_COEFF_Q16.length; i += 1) {
-      if (def & (1 << i)) {
+      if (d === 0) break;
+
+      if ((d & 1) !== 0) {
+        // ここで先に整数化し、Q16係数を掛けた後は割らずにQ16のまま保持する。
         const aInt = Math.trunc(aQ16 / Q16);
         aQ16 = aInt * DEF_COEFF_Q16[i];
       }
+
+      d = Math.trunc(d / 2);
     }
+
     return aQ16;
   }
 
   /**
-   * ��_���[�W���v�Z����֐��B
-   * �����̐��m�������ւ��_�Ƃ��ĕ�������B
+   * 防御減衰後、乱数補正前の基準値をQ16固定小数点で返す。
+   * 受ダメと与ダメは attack/defense の作り方だけが違い、この関数以降は共通処理にする。
    */
   function calculateBaseDamage(attackerAttack, defenderDefense, options = {}) {
     void options;
@@ -27,52 +36,20 @@
   }
 
   /**
-   * �����̕��z�v�Z���W�b�N�{�́B
-   * baseQ16 ���󂯎��A�_���[�W���z��Ԃ��B
+   * 64通りの乱数 224..287 をすべて列挙して1回攻撃の分布を作る。
+   * 倒確率はこの rows を畳み込むため、ここが受ダメ/与ダメ共通の正確な単発分布になる。
    */
-  function buildDistributionFastFromBaseQ16(baseQ16) {
-    const avgQ16 = baseQ16;
-
-    // ���������̕���`���ێ�����B
-    const widthQ16 = Math.floor(avgQ16 / 8);
-
-    // +�h�炬��-�h�炬�̗����𐔂��邽��2�{�B
-    const totalOutcomes = 2 * (widthQ16 + 1);
-
+  function buildDistributionFromBaseQ16(baseQ16) {
+    const totalOutcomes = 64;
     const counts = new Map();
+    let damageSum = 0;
 
-    // �ŏ��_���[�W1���ێ���������d�l�B
-    function addCount(rawDamage, count) {
-      if (count <= 0) return;
-      const dmg = rawDamage === 0 ? 1 : rawDamage;
-      counts.set(dmg, (counts.get(dmg) ?? 0) + count);
-    }
-
-    function countMagInRange(lo, hi) {
-      const a = Math.max(0, lo);
-      const b = Math.min(widthQ16, hi);
-      if (a > b) return 0;
-      return b - a + 1;
-    }
-
-    // +��: damage = floor((avgQ16 + magQ16) / Q16)
-    const dPlusMin = Math.floor(avgQ16 / Q16);
-    const dPlusMax = Math.floor((avgQ16 + widthQ16) / Q16);
-    for (let d = dPlusMin; d <= dPlusMax; d += 1) {
-      const lo = d * Q16 - avgQ16;
-      const hi = (d + 1) * Q16 - 1 - avgQ16;
-      const cnt = countMagInRange(lo, hi);
-      addCount(d, cnt);
-    }
-
-    // -��: damage = floor((avgQ16 - magQ16) / Q16)
-    const dMinusMin = Math.floor((avgQ16 - widthQ16) / Q16);
-    const dMinusMax = Math.floor(avgQ16 / Q16);
-    for (let d = dMinusMin; d <= dMinusMax; d += 1) {
-      const lo = avgQ16 - (d + 1) * Q16 + 1;
-      const hi = avgQ16 - d * Q16;
-      const cnt = countMagInRange(lo, hi);
-      addCount(d, cnt);
+    for (let random = 224; random <= 287; random += 1) {
+      // baseQ16 はすでに65536倍なので、乱数補正の /256 とQ16解除の /65536 を同時に行う。
+      const rawDamage = Math.floor((baseQ16 * random) / (256 * Q16));
+      const damage = Math.max(1, rawDamage);
+      counts.set(damage, (counts.get(damage) ?? 0) + 1);
+      damageSum += damage;
     }
 
     const rows = [...counts.entries()]
@@ -81,8 +58,8 @@
 
     let cumulative = 0;
     return {
-      avgQ16,
-      widthQ16,
+      baseQ16,
+      avgQ16: Math.round((damageSum * Q16) / totalOutcomes),
       totalOutcomes,
       rows: rows.map((row) => {
         const prob = row.count / totalOutcomes;
@@ -98,12 +75,12 @@
   }
 
   /**
-   * 1��U���̃_���[�W���z���v�Z������J�֐��B
-   * ���܂͊������W�b�N�ֈϏ����Č݊����ێ�����B
+   * 通常攻撃1回分の分布を返す公開関数。
+   * attackerAttack/defenderDefense が受ダメ由来でも与ダメ由来でも、ここから先は同じ式を使う。
    */
   function calculateDamageDistribution(attackerAttack, defenderDefense, options = {}) {
     const baseQ16 = calculateBaseDamage(attackerAttack, defenderDefense, options);
-    return buildDistributionFastFromBaseQ16(baseQ16);
+    return buildDistributionFromBaseQ16(baseQ16);
   }
 
   /**
