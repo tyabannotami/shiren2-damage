@@ -537,8 +537,8 @@
     const monsterAttack = extendedInputs.monster.attack;
     const monsterDefense = extendedInputs.monster.defense;
 
-    // 追加UIがないテスト用HTMLでは playerAttack などが null になる。
-    // その場合は従来通り、直接入力された攻撃力・守備力をそのまま使う。
+    // テスト用HTMLなど追加UIがない環境では playerAttack などが null になる。
+    // その場合だけ、テスト用DOMの base/def を使って従来の計算API確認を継続する。
     const canUseExtendedDamage = Number.isInteger(playerAttack) && Number.isInteger(monsterDefense);
     const canUseExtendedTaken = Number.isInteger(monsterAttack) && Number.isInteger(playerDefense);
 
@@ -795,11 +795,14 @@
       setError('');
 
       try {
-        const baseInput = Number(document.getElementById('base').value);
-        const defInput = Number(document.getElementById('def').value);
-
-        const base = parseInput(baseInput, { min: 0, max: 9999, name: 'base' });
-        const def = parseInput(defInput, { min: 0, max: 9999, name: 'def' });
+        const baseInput = getOptionalInput('base');
+        const defInput = getOptionalInput('def');
+        const base = baseInput
+          ? parseInput(Number(baseInput.value), { min: 0, max: 9999, name: 'base' })
+          : null;
+        const def = defInput
+          ? parseInput(Number(defInput.value), { min: 0, max: 9999, name: 'def' })
+          : null;
 
         // 追加した入力欄を読み、正確式へ渡す前段の攻撃力・守備力を組み立てる。
         // 防御補正と乱数補正の正確式そのものは、calculateDamageDistribution の中で従来通り処理する。
