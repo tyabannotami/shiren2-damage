@@ -12,28 +12,6 @@
 
     <section class="panel">
       <form id="calc-form" class="form-grid">
-        <!--
-          既存の正確式計算は、引き続きこの攻撃力・守備力を直接使う。
-          追加した実プレイ向け入力は、現時点では値取得のみ行い、計算式には反映しない。
-        -->
-        <fieldset class="form-section">
-          <legend>直接入力</legend>
-
-          <div class="field-row">
-            <label for="base">攻撃力</label>
-            <input id="base" name="base" type="number" min="0" max="9999" step="1" required value="50" />
-          </div>
-
-          <div class="field-row">
-            <label for="def">守備力</label>
-            <input id="def" name="def" type="number" min="0" max="9999" step="1" required value="20" />
-          </div>
-        </fieldset>
-
-        <!--
-          docs/shiren2_damage_ui_design.md の入力項目に合わせた拡張欄。
-          TODO: レベル、武器の強さ、ちからから算出した攻撃力を、既存の base 入力へ反映できるようにする。
-        -->
         <fieldset class="form-section">
           <legend>シレン</legend>
 
@@ -96,16 +74,13 @@
           </label>
         </fieldset>
 
-        <!--
-          盾印は現時点では「ち」印のみ。
-          TODO: 盾の強さと「ち」印から算出した守備力を、既存の def 入力へ反映できるようにする。
-        -->
+        <!-- 盾印は現時点では「命印」のみ。 -->
         <fieldset class="form-section">
           <legend>盾印</legend>
 
           <div class="field-row">
-            <label for="shield-seal-chi">ち印</label>
-            <input id="shield-seal-chi" name="shieldSealChi" type="number" min="0" max="99" step="1" value="0" />
+            <label for="shield-seal-life">命印</label>
+            <input id="shield-seal-life" name="shieldSealLife" type="number" min="0" max="99" step="1" value="0" />
           </div>
         </fieldset>
 
@@ -147,9 +122,10 @@
           <p class="sub-note" id="monster-data-note">モンスターデータ未読み込みでも、数値を直接入力できます。</p>
         </fieldset>
 
+        <input id="monster-species1" name="monsterSpecies1" type="hidden" />
+        <input id="monster-species2" name="monsterSpecies2" type="hidden" />
         <button type="submit">計算</button>
       </form>
-      <p class="note">※ 計算量の都合で 攻撃力 、守備力は0〜9999 に制限しています。</p>
       <p id="error" class="error" role="alert" aria-live="polite"></p>
     </section>
 

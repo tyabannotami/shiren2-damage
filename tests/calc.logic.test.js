@@ -226,13 +226,93 @@
     `row30.tailGte=${row30?.tailProbGte}, row30.tailGt=${row30?.tailProbGt}`,
   );
 
+  // 7) Weapon seals apply only when the selected monster species matches.
+  const dragonSealBonus = window.calculateWeaponSealBonusPercent(
+    { butsu: 1, me: 0, tsuki: 0, ryu: 1, doSeal: 0, ryuAlt: 0 },
+    { species1: 0, species2: 64 },
+  );
+  const ghostDragonBonus = window.calculateWeaponSealBonusPercent(
+    { butsu: 1, me: 0, tsuki: 0, ryu: 1, doSeal: 0, ryuAlt: 0 },
+    { species1: 0, species2: 76 },
+  );
+  const bombBonus = window.calculateWeaponSealBonusPercent(
+    { butsu: 0, me: 0, tsuki: 1, ryu: 0, doSeal: 0, ryuAlt: 0 },
+    { species1: 16, species2: 0 },
+  );
+  const drainBonus = window.calculateWeaponSealBonusPercent(
+    { butsu: 0, me: 0, tsuki: 0, ryu: 0, doSeal: 10, ryuAlt: 0 },
+    { species1: 0, species2: 2 },
+  );
+  const dragonAltBonus = window.calculateWeaponSealBonusPercent(
+    { butsu: 0, me: 0, tsuki: 0, ryu: 0, doSeal: 0, ryuAlt: 1 },
+    { species1: 0, species2: 72 },
+  );
+  const nonMatchingBonus = window.calculateWeaponSealBonusPercent(
+    { butsu: 1, me: 0, tsuki: 0, ryu: 0, doSeal: 0, ryuAlt: 0 },
+    { species1: 0, species2: 64 },
+  );
+  assert(
+    '7. weapon seal bonus follows monster species',
+    dragonSealBonus === 50
+      && ghostDragonBonus === 100
+      && bombBonus === 50
+      && drainBonus === 400
+      && dragonAltBonus === 100
+      && nonMatchingBonus === 0,
+    `dragon=${dragonSealBonus}, species76=${ghostDragonBonus}, bomb=${bombBonus}, drain=${drainBonus}, dragonAlt=${dragonAltBonus}, nonMatching=${nonMatchingBonus}`,
+  );
+
+  // 7-extra) Weapon seals transform the dealt-damage distribution without changing the outcome count.
+  const boostedDist = window.applyWeaponSealsToDamageDistribution(dist, dragonSealBonus);
+  const boostedCount = boostedDist.rows.reduce((acc, row) => acc + row.count, 0);
+  assert(
+    '7-extra. weapon seals boost dealt damage distribution',
+    boostedDist.totalOutcomes === dist.totalOutcomes
+      && boostedCount === dist.totalOutcomes
+      && boostedDist.rows[0].damage === 36
+      && boostedDist.rows[boostedDist.rows.length - 1].damage === 46
+      && dist.rows[0].damage === 24
+      && dist.rows[dist.rows.length - 1].damage === 31,
+    `boosted=${boostedDist.rows.map((row) => `${row.damage}:${row.count}`).join(',')}`,
+  );
+
+  // 8) Critical hit is a dealt-damage-only final 1.5x floor transform.
+  const criticalDist = window.applyCriticalHitToDamageDistribution(dist, true);
+  const criticalCount = criticalDist.rows.reduce((acc, row) => acc + row.count, 0);
+  assert(
+    '8. critical hit boosts dealt damage distribution',
+    criticalDist.totalOutcomes === dist.totalOutcomes
+      && criticalCount === dist.totalOutcomes
+      && criticalDist.rows[0].damage === 36
+      && criticalDist.rows[criticalDist.rows.length - 1].damage === 46
+      && criticalDist.rows.every((row) => dist.rows.some((baseRow) => Math.trunc(baseRow.damage * 1.5) === row.damage)),
+    `critical=${criticalDist.rows.map((row) => `${row.damage}:${row.count}`).join(',')}`,
+  );
+
+  const noCriticalDist = window.applyCriticalHitToDamageDistribution(dist, false);
+  assert(
+    '8-extra. critical hit off keeps original distribution object',
+    noCriticalDist === dist,
+  );
+
+  // 8-extra-b) Kill probability can consume the critical-adjusted distribution.
+  assert(
+    '8-extra-b. kill probability uses critical-adjusted distribution when provided',
+    approxEqual(window.calculateKillProbability(criticalDist, 36, 1), 1)
+      && approxEqual(window.calculateKillProbability(dist, 36, 1), 0),
+    `criticalP=${window.calculateKillProbability(criticalDist, 36, 1)}, normalP=${window.calculateKillProbability(dist, 36, 1)}`,
+  );
+
   // Extra: required public API functions are exposed.
   assert(
     'API. required functions are exposed',
     typeof window.calculateBaseDamage === 'function'
       && typeof window.calculateDamageDistribution === 'function'
       && typeof window.calculateDamageRange === 'function'
-      && typeof window.calculateKillProbability === 'function',
+      && typeof window.calculateKillProbability === 'function'
+      && typeof window.calculateWeaponSealBonusPercent === 'function'
+      && typeof window.applyWeaponSealsToDamageDistribution === 'function'
+      && typeof window.applyCriticalHitToDamageDistribution === 'function',
   );
 
   const pass = results.filter((r) => r.ok).length;
