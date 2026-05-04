@@ -55,7 +55,7 @@ h1 {
 
 .field-row {
   display: grid;
-  grid-template-columns: minmax(120px, 180px) minmax(0, 260px);
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
   gap: 8px 12px;
   align-items: center;
 }
@@ -76,8 +76,20 @@ h1 {
 input[type="number"],
 input[type="text"],
 select {
+  box-sizing: border-box;
   padding: 6px 8px;
   font-size: 1rem;
+  max-width: 100%;
+  width: 100%;
+}
+
+#monster-name,
+#monster-select {
+  min-width: min(100%, 32rem);
+}
+
+#monster-select {
+  white-space: normal;
 }
 
 input[type="checkbox"] {
