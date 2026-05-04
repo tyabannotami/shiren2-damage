@@ -15,6 +15,20 @@
     134, 135, 136, 137, 138, 139, 140, 141, 145,
   ];
 
+  const WEAPON_SEAL_BONUS_TABLES = {
+    // docs/shiren2_damage_ui_design.md の武器印表に対応する増加量(%).
+    // 配列の添字を印の個数として扱うため、0個目には0を置く。
+    butsu: [0, 50, 60, 70, 80, 90, 100, 140, 170, 200, 250, 300, 350, 400, 450, 500, 550, 600],
+    me: [0, 50, 60, 70, 80, 90, 100, 140, 170, 200, 250, 300, 350, 400, 450, 500, 550, 600],
+    tsuki: [0, 50, 60, 70, 80, 90, 100, 140, 170, 200, 250, 300, 350, 400, 450, 500, 550, 600],
+    // 竜印はゲーム仕様上16個まで。UI側もmax=16にしている。
+    ryu: [0, 50, 60, 70, 80, 90, 100, 140, 170, 200, 250, 300, 350, 400, 450, 500, 550],
+    doSeal: [0, 50, 60, 70, 80, 90, 100, 140, 170, 200, 400, 400, 400, 400, 400, 400, 400, 400],
+    ryuAlt: [0, 100, 120, 150, 170, 200, 250, 300, 400, 450, 500, 500, 500, 500, 500, 500, 500, 500],
+  };
+
+  const DRAGON_SPECIES2 = new Set([64, 72, 76, 96]);
+
   /**
    * docs/shiren2_damage_formula.md の ApplyDefense_Q16 相当処理。
    * defense を2進数ビットに分解し、立っているビットだけ Q16 係数を掛ける。
@@ -72,20 +86,20 @@
 
   /**
    * 盾の強さと盾印からシレン側の守備力を算出する。
-   * 現時点で扱う盾印は「ち」印のみ。
+   * 現時点で扱う盾印は「命印」のみ。
    *
    * 式:
-   *   defense = int((shieldPower + chiSealCount) / 2)
+   *   defense = int((shieldPower + lifeSealCount) / 2)
    *
-   * TODO: 「ち」印以外の盾印が確認された場合は、この関数の入力と式を拡張する。
+   * TODO: 命印以外の盾印が確認された場合は、この関数の入力と式を拡張する。
    */
   function calculatePlayerDefense(shieldPower, shieldSeals = {}, options = {}) {
     void options;
 
-    const chiSealCount = shieldSeals.chi ?? 0;
-    if (!Number.isInteger(shieldPower) || !Number.isInteger(chiSealCount)) return null;
+    const lifeSealCount = shieldSeals.life ?? 0;
+    if (!Number.isInteger(shieldPower) || !Number.isInteger(lifeSealCount)) return null;
 
-    return Math.trunc((shieldPower + chiSealCount) / 2);
+    return Math.trunc((shieldPower + lifeSealCount) / 2);
   }
 
   function countIntegersInRange(start, end) {
@@ -218,10 +232,132 @@
   }
 
   /**
+   * 武器印の個数から、docsの表にあるダメージ増加量(%)を返す。
+   */
+  function getWeaponSealBonusPercent(tableKey, count) {
+    const table = WEAPON_SEAL_BONUS_TABLES[tableKey];
+    if (!table) return 0;
+
+    // UIからはnumber入力で入るが、手動入力やテストから小数が来ても
+    // 印の個数として扱えるよう整数に丸め、表の範囲に収める。
+    const normalizedCount = Number.isFinite(count) ? Math.trunc(count) : 0;
+    const clampedCount = Math.max(0, Math.min(normalizedCount, table.length - 1));
+    return table[clampedCount] ?? 0;
+  }
+
+  function getMonsterSpeciesFlags(monster = {}) {
+    const species1 = Number(monster.species1);
+    const species2 = Number(monster.species2);
+
+    // モンスターデータCSVの「種1」「種2」を、武器印が参照しやすい形へ変換する。
+    // 種2=76はドラゴンとゴーストの両方を持つため、両方trueにする。
+    return {
+      bomb: species1 === 16,
+      drain: species2 === 2,
+      ghost: species2 === 4 || species2 === 76,
+      oneEye: species2 === 16 || species2 === 24,
+      dragon: DRAGON_SPECIES2.has(species2),
+    };
+  }
+
+  function calculateWeaponSealBonusPercent(weaponSeals = {}, monster = {}) {
+    const species = getMonsterSpeciesFlags(monster);
+    let bonusPercent = 0;
+
+    // 武器印は攻撃力には混ぜず、正確式で通常ダメージ分布を作った後の
+    // 与ダメージだけに最終補正として反映する。被ダメージや会心とは別処理。
+    if (species.ghost) bonusPercent += getWeaponSealBonusPercent('butsu', weaponSeals.butsu);
+    if (species.oneEye) bonusPercent += getWeaponSealBonusPercent('me', weaponSeals.me);
+    if (species.bomb) bonusPercent += getWeaponSealBonusPercent('tsuki', weaponSeals.tsuki);
+    if (species.dragon) bonusPercent += getWeaponSealBonusPercent('ryu', weaponSeals.ryu);
+    if (species.drain) bonusPercent += getWeaponSealBonusPercent('doSeal', weaponSeals.doSeal);
+    if (species.dragon) bonusPercent += getWeaponSealBonusPercent('ryuAlt', weaponSeals.ryuAlt);
+
+    return bonusPercent;
+  }
+
+  function buildDistributionFromDamageCounts(sourceDistribution, damageCounts) {
+    const totalOutcomes = sourceDistribution.totalOutcomes;
+    const rows = [...damageCounts.entries()]
+      .sort(([leftDamage], [rightDamage]) => leftDamage - rightDamage)
+      .map(([damage, count]) => ({ damage, count }));
+    let damageSum = 0;
+    let cumulative = 0;
+
+    const rowsWithProb = rows.map((row) => {
+      const prob = row.count / totalOutcomes;
+      damageSum += row.damage * row.count;
+      cumulative += prob;
+      return {
+        damage: row.damage,
+        count: row.count,
+        prob,
+        percent: prob * 100,
+        cumProb: cumulative,
+      };
+    });
+
+    let tailProbGte = 0;
+    for (let i = rowsWithProb.length - 1; i >= 0; i -= 1) {
+      const row = rowsWithProb[i];
+      row.tailProbGt = tailProbGte;
+      tailProbGte += row.prob;
+      row.tailProbGte = tailProbGte;
+    }
+
+    const avgDamageQ16 = Math.round((damageSum * Q16) / totalOutcomes);
+    return {
+      ...sourceDistribution,
+      // 武器印補正後は最終ダメージの期待値を表示に使いたいため、
+      // avgQ16も補正後分布の平均に更新する。baseQ16/widthQ16は元の正確式の値を残す。
+      avgQ16: avgDamageQ16,
+      avgDamageQ16,
+      rows: rowsWithProb,
+    };
+  }
+
+  function applyWeaponSealsToDamageDistribution(damageDistribution, bonusPercent) {
+    if (!damageDistribution || !Array.isArray(damageDistribution.rows)) return damageDistribution;
+    if (!Number.isFinite(bonusPercent) || bonusPercent <= 0) return damageDistribution;
+
+    const multiplierPercent = 100 + bonusPercent;
+    const damageCounts = new Map();
+
+    for (const row of damageDistribution.rows) {
+      // VBA版相当の分布生成で出た「表示ダメージ」に対して、対象印の増加量を掛ける。
+      // ここでは乱数幅や防御減衰は再計算せず、通り数だけを同じ母数のまま集約し直す。
+      const boostedDamage = Math.max(1, Math.trunc((row.damage * multiplierPercent) / 100));
+      damageCounts.set(boostedDamage, (damageCounts.get(boostedDamage) ?? 0) + row.count);
+    }
+
+    return {
+      ...buildDistributionFromDamageCounts(damageDistribution, damageCounts),
+      weaponSealBonusPercent: bonusPercent,
+    };
+  }
+
+  function applyCriticalHitToDamageDistribution(damageDistribution, criticalHit) {
+    if (!damageDistribution || !Array.isArray(damageDistribution.rows)) return damageDistribution;
+    if (!criticalHit) return damageDistribution;
+
+    const damageCounts = new Map();
+
+    for (const row of damageDistribution.rows) {
+      // 会心の一撃は、docsで定義した「会印による1.5倍」だけを扱う。
+      // 超会心の腕輪の5倍とは別物。武器印などを反映した最終ダメージへ掛ける。
+      const criticalDamage = Math.max(1, Math.trunc(row.damage * 1.5));
+      damageCounts.set(criticalDamage, (damageCounts.get(criticalDamage) ?? 0) + row.count);
+    }
+
+    return {
+      ...buildDistributionFromDamageCounts(damageDistribution, damageCounts),
+      criticalHit: true,
+    };
+  }
+
+  /**
    * 指定回数の攻撃で目標HPを倒せる確率を計算する。
-   * damageDistribution: calculateDamageDistribution の戻り値。
-   * targetHp: 目標HP。
-   * attackCount: 攻撃回数。
+   * 武器印が効く場合は、補正済みの与ダメージ分布を渡すことで撃破率にも反映する。
    */
   function calculateKillProbability(damageDistribution, targetHp, attackCount) {
     if (!Number.isInteger(targetHp) || targetHp <= 0) return 0;
@@ -402,6 +538,16 @@
     setInputValueIfExists('monster-hp', monster.hp);
     setInputValueIfExists('monster-attack', monster.attack);
     setInputValueIfExists('monster-defense', monster.defense);
+    // 武器印の対象判定だけに使う種別値。画面には出さず、候補選択時だけ保持する。
+    setInputValueIfExists('monster-species1', monster.species1);
+    setInputValueIfExists('monster-species2', monster.species2);
+  }
+
+  function clearMonsterSpeciesFormValues() {
+    // モンスター名を直接入力して候補に一致しない場合、古い選択モンスターの種別が
+    // 残ると武器印だけ誤って効いてしまうため、種別だけ空に戻す。
+    setInputValueIfExists('monster-species1', '');
+    setInputValueIfExists('monster-species2', '');
   }
 
   function populateMonsterCandidates(monsters) {
@@ -443,7 +589,11 @@
     if (select) {
       select.addEventListener('change', () => {
         const monster = findMonsterByName(monsters, select.value);
-        applyMonsterToForm(monster);
+        if (monster) {
+          applyMonsterToForm(monster);
+        } else {
+          clearMonsterSpeciesFormValues();
+        }
       });
     }
 
@@ -459,6 +609,7 @@
           // 手入力が候補と一致しない場合は、古い選択状態だけ残ると紛らわしい。
           // 数値欄はユーザーの手入力を尊重して、そのまま残す。
           select.value = '';
+          clearMonsterSpeciesFormValues();
         }
       });
     }
@@ -510,7 +661,7 @@
       },
       criticalHit: readOptionalCheckbox('critical-hit'),
       shieldSeals: {
-        chi: readOptionalNumber('shield-seal-chi', 0),
+        life: readOptionalNumber('shield-seal-life', 0),
       },
       monster: {
         name: readOptionalText('monster-name'),
@@ -518,6 +669,8 @@
         hp: readOptionalNumber('monster-hp'),
         attack: readOptionalNumber('monster-attack'),
         defense: readOptionalNumber('monster-defense'),
+        species1: readOptionalNumber('monster-species1'),
+        species2: readOptionalNumber('monster-species2'),
       },
     };
   }
@@ -809,7 +962,23 @@
         const extendedInputs = readExtendedUiInputs();
         const combatInputs = buildCombatInputs(base, def, extendedInputs);
 
-        const dealtDistribution = calculateDamageDistribution(combatInputs.dealt.attack, combatInputs.dealt.defense);
+        const baseDealtDistribution = calculateDamageDistribution(combatInputs.dealt.attack, combatInputs.dealt.defense);
+        const weaponSealBonusPercent = calculateWeaponSealBonusPercent(
+          extendedInputs.weaponSeals,
+          extendedInputs.monster,
+        );
+        // 防御減衰と乱数分布は正確式のまま作り、その後で対象種別に一致した武器印だけを
+        // 与ダメージ分布へ反映する。被ダメージ側には同じ補正を渡さない。
+        const dealtDistribution = applyWeaponSealsToDamageDistribution(
+          baseDealtDistribution,
+          weaponSealBonusPercent,
+        );
+        // 会心チェックが入っている場合だけ、与ダメージの最終分布へ1.5倍切り捨てを掛ける。
+        // 被ダメージ側には渡さず、武器印とは別の後段補正として扱う。
+        const finalDealtDistribution = applyCriticalHitToDamageDistribution(
+          dealtDistribution,
+          extendedInputs.criticalHit,
+        );
         const takenDistribution = combatInputs.taken
           ? calculateDamageDistribution(combatInputs.taken.attack, combatInputs.taken.defense)
           : null;
@@ -819,7 +988,11 @@
           inputs: combatInputs,
           dealt: {
             ...combatInputs.dealt,
-            distribution: dealtDistribution,
+            distribution: finalDealtDistribution,
+            baseDistribution: baseDealtDistribution,
+            weaponSealDistribution: dealtDistribution,
+            weaponSealBonusPercent,
+            criticalHit: extendedInputs.criticalHit,
           },
           taken: combatInputs.taken && takenDistribution
             ? {
@@ -853,6 +1026,10 @@
   window.calculateKillProbability = calculateKillProbability;
   window.calculatePlayerAttack = calculatePlayerAttack;
   window.calculatePlayerDefense = calculatePlayerDefense;
+  window.getMonsterSpeciesFlags = getMonsterSpeciesFlags;
+  window.calculateWeaponSealBonusPercent = calculateWeaponSealBonusPercent;
+  window.applyWeaponSealsToDamageDistribution = applyWeaponSealsToDamageDistribution;
+  window.applyCriticalHitToDamageDistribution = applyCriticalHitToDamageDistribution;
 
   bindUI();
 })();

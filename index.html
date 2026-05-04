@@ -74,13 +74,13 @@
           </label>
         </fieldset>
 
-        <!-- 盾印は現時点では「ち」印のみ。 -->
+        <!-- 盾印は現時点では「命印」のみ。 -->
         <fieldset class="form-section">
           <legend>盾印</legend>
 
           <div class="field-row">
-            <label for="shield-seal-chi">ち印</label>
-            <input id="shield-seal-chi" name="shieldSealChi" type="number" min="0" max="99" step="1" value="0" />
+            <label for="shield-seal-life">命印</label>
+            <input id="shield-seal-life" name="shieldSealLife" type="number" min="0" max="99" step="1" value="0" />
           </div>
         </fieldset>
 
@@ -122,6 +122,8 @@
           <p class="sub-note" id="monster-data-note">モンスターデータ未読み込みでも、数値を直接入力できます。</p>
         </fieldset>
 
+        <input id="monster-species1" name="monsterSpecies1" type="hidden" />
+        <input id="monster-species2" name="monsterSpecies2" type="hidden" />
         <button type="submit">計算</button>
       </form>
       <p id="error" class="error" role="alert" aria-live="polite"></p>
