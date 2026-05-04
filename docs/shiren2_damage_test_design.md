@@ -1,26 +1,56 @@
-﻿# シレン2ダメージ計算機 テスト設計書
+# シレン2ダメージ計算機 テスト設計書
 
 ## 目的
 
-この文書は、現存するブラウザ実行用テストが何を確認しているかを整理し、今後の正確式差し替え時に判断材料として使えるようにするためのものです。
+この文書は、ブラウザ実行用テストが何を確認しているかを整理するためのものです。
 
-現時点のテストは、シレン2の正確式そのものを保証するものではなく、現在実装されている計算APIの基本的な整合性と異常値の有無を確認するためのスモークテストです。今後、正確式へ差し替える前の判断材料として利用します。
+現在のテストでは、VBA版で使っていた `DamageDist_Build` 相当の分布生成ロジックと、Web版の分布・確率・撃破率計算が一致することを重視します。
 
 ## 対象ファイル
 
 - `tests/calc.logic.test.html`
   - ブラウザでテストを実行するためのHTMLです。
-  - `calc.js` の `bindUI()` が参照する最小限のDOMをダミーとして用意し、`calc.js` と `tests/calc.logic.test.js` を読み込みます。
-  - `<html lang="ja">` と `<meta charset="UTF-8">` が指定されています。
+  - `calc.js` の `bindUI()` が参照する最小限のDOMを用意し、`calc.js` と `tests/calc.logic.test.js` を読み込みます。
 
 - `tests/calc.logic.test.js`
   - ブラウザ上で `window` に公開された計算関数を呼び出す簡易テストランナーです。
   - `PASS` / `FAIL` と詳細値を `<pre id="log">` に出力します。
   - テスト結果は `window.TEST_RESULTS` にも格納されます。
 
+## 正しい分布生成仕様
+
+ダメージ分布は64通り固定ではありません。
+旧仕様または仮式として使っていた `224〜287/256` の64通り分布は、VBA版との比較における正確式ではありません。
+
+現在の正しい分布生成は、VBA版 `DamageDist_Build` と同じ考え方です。
+
+```text
+avgQ16 = ApplyDefense_Q16(base, def)
+widthQ16 = avgQ16 >> 3
+
+for m = 0..widthQ16:
+  dmgQ16 = avgQ16 - m
+  dmg = dmgQ16 \ 65536
+  if dmg == 0:
+    dmg = 1
+  count[dmg] += 1
+
+  dmgQ16 = avgQ16 + m
+  dmg = dmgQ16 \ 65536
+  if dmg == 0:
+    dmg = 1
+  count[dmg] += 1
+
+totalOutcomes = 2 * (widthQ16 + 1)
+prob = count / totalOutcomes
+```
+
+Web版では、処理速度のために `m` を1件ずつ総当たりせず、同じ結果になる整数区間集計で実装してもよいものとします。
+ただし、`count`、`totalOutcomes`、`prob`、`tailProbGte`、`tailProbGt` は、VBA版で1件ずつ加算した場合と一致する必要があります。
+
 ## 共通入力
 
-多くのテストは、次の基準ケースを使用しています。
+基準ケースは次を使用します。
 
 - 攻撃力: `50`
 - 防御力: `20`
@@ -28,172 +58,166 @@
 - `dist = window.calculateDamageDistribution(50, 20)`
 - `range = window.calculateDamageRange(50, 20)`
 
+基準ケースのVBA版期待値:
+
+- `baseDamageQ16 = 1837308`
+- `widthQ16 = 229663`
+- `totalOutcomes = 459328`
+- 分布:
+
+| damage | count |
+|---:|---:|
+| 24 | 30755 |
+| 25 | 65536 |
+| 26 | 65536 |
+| 27 | 65536 |
+| 28 | 65537 |
+| 29 | 65536 |
+| 30 | 65536 |
+| 31 | 35356 |
+
+## 代表ケース
+
+VBA版との比較用に、次の代表ケースをテストします。
+
+### base=22, def=8
+
+- `avgQ16 = 1150864`
+- `widthQ16 = 143858`
+- `totalOutcomes = 287718`
+
+| damage | count |
+|---:|---:|
+| 15 | 41570 |
+| 16 | 65536 |
+| 17 | 65537 |
+| 18 | 65536 |
+| 19 | 49539 |
+
+### base=23, def=8
+
+- `avgQ16 = 1203176`
+- `widthQ16 = 150397`
+- `totalOutcomes = 300796`
+
+| damage | count |
+|---:|---:|
+| 16 | 61333 |
+| 17 | 65536 |
+| 18 | 65537 |
+| 19 | 65536 |
+| 20 | 42854 |
+
+### base=200, def=53
+
+- `avgQ16 = 2926660`
+- `widthQ16 = 365832`
+- `totalOutcomes = 731666`
+
+| damage | count |
+|---:|---:|
+| 39 | 60612 |
+| 40 | 65536 |
+| 41 | 65536 |
+| 42 | 65536 |
+| 43 | 65536 |
+| 44 | 65537 |
+| 45 | 65536 |
+| 46 | 65536 |
+| 47 | 65536 |
+| 48 | 65536 |
+| 49 | 65536 |
+| 50 | 15693 |
+
 ## テスト一覧
 
 ### 1. damage distribution is generated
 
-- テスト名: `1. damage distribution is generated`
-- 対象関数または対象処理: `calculateDamageDistribution`
-- 入力値:
-  - 攻撃力: `50`
-  - 防御力: `20`
-- 期待結果:
-  - `dist` が存在する
-  - `dist.rows` が配列である
-  - `dist.rows.length > 0`
-  - `dist.totalOutcomes` が整数である
-  - `dist.totalOutcomes > 0`
-- 確認していること:
-  - ダメージ分布オブジェクトが最低限利用可能な形で生成されること。
-  - 分布行と総試行数に相当する値が空や不正値になっていないこと。
-- 失敗した場合に疑うべき箇所:
-  - `calculateDamageDistribution`
-  - `calculateBaseDamage`
-  - `buildDistributionFastFromBaseQ16`
-  - `window.calculateDamageDistribution` の公開漏れ
+- 対象: `calculateDamageDistribution`
+- 確認内容:
+  - 分布オブジェクトが存在する
+  - `rows` が空ではない
+  - `totalOutcomes` が正の整数である
 
 ### 2. row counts sum to totalOutcomes
 
-- テスト名: `2. row counts sum to totalOutcomes`
-- 対象関数または対象処理: `calculateDamageDistribution` が返す `rows` と `totalOutcomes`
-- 入力値:
-  - 攻撃力: `50`
-  - 防御力: `20`
-- 期待結果:
-  - `dist.rows` の各 `count` を合計した値が `dist.totalOutcomes` と一致する
-- 確認していること:
-  - ダメージごとの通り数の合計と、分布全体の通り数が矛盾していないこと。
-  - 確率 `prob = count / totalOutcomes` の母数として `totalOutcomes` が整合していること。
-- 失敗した場合に疑うべき箇所:
-  - `buildDistributionFastFromBaseQ16` 内の `totalOutcomes` 算出
-  - `addCount`
-  - `countMagInRange`
-  - プラス側/マイナス側の範囲集計処理
+- 対象: `rows` と `totalOutcomes`
+- 確認内容:
+  - 全行の `count` 合計が `totalOutcomes` と一致する
+  - `prob = count / totalOutcomes` の母数が整合している
 
-### 3. calculateDamageRange matches distribution min/max
+### 3. totalOutcomes follows VBA widthQ16 formula
 
-- テスト名: `3. calculateDamageRange matches distribution min/max`
-- 対象関数または対象処理:
-  - `calculateDamageRange`
-  - `calculateDamageDistribution`
-- 入力値:
-  - 攻撃力: `50`
-  - 防御力: `20`
-- 期待結果:
-  - `range.minDamage === dist.rows[0].damage`
-  - `range.maxDamage === dist.rows[dist.rows.length - 1].damage`
-- 確認していること:
-  - ダメージ範囲APIが、分布の最小値と最大値を正しく返していること。
-  - `rows` が昇順に並んでいる前提が崩れていないこと。
-- 失敗した場合に疑うべき箇所:
-  - `calculateDamageRange`
-  - `calculateDamageDistribution`
-  - `buildDistributionFastFromBaseQ16` の `rows.sort((a, b) => a.damage - b.damage)`
+- 対象: `avgQ16`、`widthQ16`、`totalOutcomes`
+- 確認内容:
+  - `widthQ16 = avgQ16 >> 3`
+  - `totalOutcomes = 2 * (widthQ16 + 1)`
+  - `totalOutcomes` が64固定ではない
 
-### 4. defense 0 keeps finite damage values
+### 4. baseline distribution matches VBA DamageDist_Build
 
-- テスト名: `4. defense 0 keeps finite damage values`
-- 対象関数または対象処理:
-  - `calculateBaseDamage`
-  - `calculateDamageDistribution`
-- 入力値:
-  - 攻撃力: `50`
-  - 防御力: `0`
-- 期待結果:
-  - `calculateBaseDamage(50, 0)` が有限数である
-  - すべての分布行について `damage` が有限数である
-  - すべての分布行について `damage >= 1`
-  - すべての分布行について `prob` が有限数である
-- 確認していること:
-  - 防御力0の境界ケースで、`NaN`、`Infinity`、0ダメージなどの異常値が出ないこと。
-- 失敗した場合に疑うべき箇所:
-  - `applyDefenseQ16`
-  - `calculateBaseDamage`
-  - `buildDistributionFastFromBaseQ16`
-  - 最小ダメージを1に補正する `addCount`
+- 対象: `calculateDamageDistribution(50, 20)`
+- 確認内容:
+  - 基準ケースの `count` がVBA版期待値と一致する
+  - `calculateBaseDamage(50, 20)` が `1837308` と一致する
 
-### 5. attack 0 keeps finite damage values
+### 5. representative cases match VBA distribution counts
 
-- テスト名: `5. attack 0 keeps finite damage values`
-- 対象関数または対象処理:
-  - `calculateBaseDamage`
-  - `calculateDamageDistribution`
-- 入力値:
-  - 攻撃力: `0`
-  - 防御力: `20`
-- 期待結果:
-  - `calculateBaseDamage(0, 20)` が有限数である
-  - すべての分布行について `damage` が有限数である
-  - すべての分布行について `damage >= 1`
-  - すべての分布行について `prob` が有限数である
-- 確認していること:
-  - 攻撃力0の境界ケースで、`NaN`、`Infinity`、0ダメージなどの異常値が出ないこと。
-  - 現実の仕様として攻撃力0がどう扱われるべきかは未確定です。このテストは、少なくとも現在の実装が壊れた数値を返さないことだけを確認しています。
-- 失敗した場合に疑うべき箇所:
-  - `applyDefenseQ16`
-  - `calculateBaseDamage`
-  - `buildDistributionFastFromBaseQ16`
-  - 最小ダメージを1に補正する `addCount`
+- 対象:
+  - `calculateDamageDistribution(22, 8)`
+  - `calculateDamageDistribution(23, 8)`
+  - `calculateDamageDistribution(200, 53)`
+- 確認内容:
+  - `avgQ16`
+  - `widthQ16`
+  - `totalOutcomes`
+  - damageごとの `count`
 
-### 6. kill probability is between 0 and 1
+### 6. calculateDamageRange matches distribution min/max
 
-- テスト名: `6. kill probability is between 0 and 1`
-- 対象関数または対象処理: `calculateKillProbability`
-- 入力値:
-  - 分布: `calculateDamageDistribution(50, 20)` の結果
-  - ケース1:
-    - 目標HP: `30`
-    - 攻撃回数: `1`
-  - ケース2:
-    - 目標HP: `120`
-    - 攻撃回数: `3`
-- 期待結果:
-  - `p1` が有限数で、`0 <= p1 <= 1`
-  - `p2` が有限数で、`0 <= p2 <= 1`
-- 確認していること:
-  - 撃破確率が確率として成立する範囲に収まっていること。
-  - 複数回攻撃時の畳み込み計算で `NaN` や範囲外の値が出ないこと。
-- 失敗した場合に疑うべき箇所:
-  - `calculateKillProbability`
-  - `damageDistribution.rows` の `prob`
-  - `calculateDamageDistribution` の `count` / `totalOutcomes` の整合性
+- 対象: `calculateDamageRange`
+- 確認内容:
+  - `range.minDamage` が分布先頭のdamageと一致する
+  - `range.maxDamage` が分布末尾のdamageと一致する
 
-### 7. required functions are exposed
+### 7. boundary values do not produce invalid damage
 
-- テスト名: `API. required functions are exposed`
-- 対象関数または対象処理: `window` への公開API
-- 入力値:
-  - なし
-- 期待結果:
-  - `window.calculateBaseDamage` が関数である
-  - `window.calculateDamageDistribution` が関数である
-  - `window.calculateDamageRange` が関数である
-  - `window.calculateKillProbability` が関数である
-- 確認していること:
-  - テストや将来のUI拡張から呼び出すための公開関数が存在していること。
-- 失敗した場合に疑うべき箇所:
-  - `calc.js` 末尾の `window.*` 代入
-  - `calc.js` の読み込み失敗
-  - `tests/calc.logic.test.html` の `<script src="../calc.js"></script>`
+- 対象:
+  - `calculateDamageDistribution(50, 0)`
+  - `calculateDamageDistribution(0, 20)`
+- 確認内容:
+  - `NaN`、`Infinity`、0ダメージが出ない
+  - 攻撃力0の場合は、VBA版と同じく `widthQ16 = 0`、`totalOutcomes = 2`、1ダメージ2通りに集約される
 
-## 削除したテスト観点
+### 8. kill probability uses VBA distribution
 
-### totalOutcomes is 64 for the baseline
+- 対象: `calculateKillProbability`
+- 確認内容:
+  - 撃破率が `rows.prob` を元に計算される
+  - 基準ケースでHP30を1発撃破する確率が、30ダメージと31ダメージの確率合計になる
 
-- 削除したテスト名: `2-extra. totalOutcomes is 64 for the baseline`
-- 削除理由:
-  - `64通り` は計算上の乱数観点であり、低ダメージでは複数の乱数結果が最小ダメージ1へ補正され、表示上または分布上は1ダメージに集約される場合があります。
-  - そのため、基準ケースの `totalOutcomes` が常に `64` であることをテストするのは、現在のテスト目的には不要です。
-  - 今後のテストでは、総通り数が固定値であることではなく、現在の分布表現の中で `count`、`totalOutcomes`、`prob` が矛盾していないことを確認します。
-- 影響:
-  - この観点を削除しても、分布の最低限の生成確認は `1. damage distribution is generated` で維持されます。
-  - `count` 合計と `totalOutcomes` の整合性確認は `2. row counts sum to totalOutcomes` で維持されます。
-  - ダメージ範囲、境界値、撃破確率、公開APIの確認には影響しません。
+### 9. tail probabilities match VBA semantics
 
-## 今後の判断ポイント
+- 対象: `tailProbGte`、`tailProbGt`
+- 確認内容:
+  - `tailProbGte` は `P(damage >= row.damage)`
+  - `tailProbGt` は `P(damage > row.damage)`
+  - 基準ケースの30ダメージ行で、`tailProbGte = (65536 + 35356) / 459328`
+  - 基準ケースの30ダメージ行で、`tailProbGt = 35356 / 459328`
 
-- 正確式を導入する前に、`totalOutcomes` が何を表す値なのかを明確にする必要があります。
-- `totalOutcomes` を実機乱数の通り数として扱うのか、現在実装上の内部粒度として扱うのかは未確定です。
-- 固定値 `64` を期待するテストは削除済みのため、今後は分布内部の整合性を優先して確認します。
-- 低ダメージ時の最小ダメージ1補正により、乱数通り数と表示されるダメージ種別が一致しない場合がある点に注意します。
+### 10. required functions are exposed
 
+- 対象: `window` に公開されたAPI
+- 確認内容:
+  - `window.calculateBaseDamage`
+  - `window.calculateDamageDistribution`
+  - `window.calculateDamageRange`
+  - `window.calculateKillProbability`
+
+## 旧仕様の扱い
+
+`224〜287/256` を64通り列挙する分布は、旧仕様または仮式として扱います。
+VBA版との一致確認では使用しません。
+
+今後のテストでは、`totalOutcomes === 64` を期待してはいけません。
+分布の総通り数は常に `2 * (widthQ16 + 1)` です。

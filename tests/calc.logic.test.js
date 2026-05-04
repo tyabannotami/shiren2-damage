@@ -31,15 +31,77 @@
   const dist = window.calculateDamageDistribution(attackerAttack, defenderDefense);
   const range = window.calculateDamageRange(attackerAttack, defenderDefense);
   const expectedBaselineRows = [
-    [24, 5],
-    [25, 9],
-    [26, 9],
-    [27, 9],
-    [28, 9],
-    [29, 9],
-    [30, 10],
-    [31, 4],
+    [24, 30755],
+    [25, 65536],
+    [26, 65536],
+    [27, 65536],
+    [28, 65537],
+    [29, 65536],
+    [30, 65536],
+    [31, 35356],
   ];
+  const representativeCases = [
+    {
+      base: 22,
+      def: 8,
+      avgQ16: 1150864,
+      widthQ16: 143858,
+      totalOutcomes: 287718,
+      rows: [
+        [15, 41570],
+        [16, 65536],
+        [17, 65537],
+        [18, 65536],
+        [19, 49539],
+      ],
+    },
+    {
+      base: 23,
+      def: 8,
+      avgQ16: 1203176,
+      widthQ16: 150397,
+      totalOutcomes: 300796,
+      rows: [
+        [16, 61333],
+        [17, 65536],
+        [18, 65537],
+        [19, 65536],
+        [20, 42854],
+      ],
+    },
+    {
+      base: 200,
+      def: 53,
+      avgQ16: 2926660,
+      widthQ16: 365832,
+      totalOutcomes: 731666,
+      rows: [
+        [39, 60612],
+        [40, 65536],
+        [41, 65536],
+        [42, 65536],
+        [43, 65536],
+        [44, 65537],
+        [45, 65536],
+        [46, 65536],
+        [47, 65536],
+        [48, 65536],
+        [49, 65536],
+        [50, 15693],
+      ],
+    },
+  ];
+
+  function rowsMatch(actualRows, expectedRows) {
+    return actualRows.length === expectedRows.length
+      && expectedRows.every(([damage, count], index) => (
+        actualRows[index]?.damage === damage && actualRows[index]?.count === count
+      ));
+  }
+
+  function approxEqual(actual, expected, epsilon = 1e-12) {
+    return Math.abs(actual - expected) <= epsilon;
+  }
 
   // 1) Damage distribution exists and has a positive outcome count.
   assert(
@@ -56,11 +118,11 @@
     `sumCount=${sumCount}, totalOutcomes=${dist.totalOutcomes}`,
   );
 
-  // 2-extra) The exact formula enumerates the 64 random values 224..287.
+  // 2-extra) VBA DamageDist_Build uses total = 2 * (widthQ16 + 1), not fixed 64 outcomes.
   assert(
-    '2-extra. totalOutcomes is exact 64 random values',
-    dist.totalOutcomes === 64,
-    `totalOutcomes=${dist.totalOutcomes}`,
+    '2-extra. totalOutcomes follows VBA widthQ16 formula',
+    dist.widthQ16 === Math.trunc(baseDamageQ16 / 8) && dist.totalOutcomes === 2 * (dist.widthQ16 + 1),
+    `widthQ16=${dist.widthQ16}, totalOutcomes=${dist.totalOutcomes}`,
   );
 
   // 2-extra-b) Baseline Q16 defense reduction follows ApplyDefense_Q16.
@@ -70,15 +132,31 @@
     `baseDamageQ16=${baseDamageQ16}`,
   );
 
-  // 2-extra-c) Baseline distribution matches all 64 random outcomes after min damage.
-  const baselineRowsMatch = dist.rows.length === expectedBaselineRows.length
-    && expectedBaselineRows.every(([damage, count], index) => (
-      dist.rows[index]?.damage === damage && dist.rows[index]?.count === count
-    ));
+  // 2-extra-c) Baseline distribution matches the VBA +/- widthQ16 enumeration.
+  const baselineRowsMatch = rowsMatch(dist.rows, expectedBaselineRows);
   assert(
-    '2-extra-c. baseline distribution matches exact random enumeration',
+    '2-extra-c. baseline distribution matches VBA DamageDist_Build',
     baselineRowsMatch,
     `rows=${dist.rows.map((row) => `${row.damage}:${row.count}`).join(',')}`,
+  );
+
+  // 2-extra-d) Representative cases used to compare with the old VBA workbook.
+  const representativeCasesMatch = representativeCases.every((testCase) => {
+    const caseBaseQ16 = window.calculateBaseDamage(testCase.base, testCase.def);
+    const caseDist = window.calculateDamageDistribution(testCase.base, testCase.def);
+    return caseBaseQ16 === testCase.avgQ16
+      && caseDist.avgQ16 === testCase.avgQ16
+      && caseDist.widthQ16 === testCase.widthQ16
+      && caseDist.totalOutcomes === testCase.totalOutcomes
+      && rowsMatch(caseDist.rows, testCase.rows);
+  });
+  assert(
+    '2-extra-d. representative cases match VBA distribution counts',
+    representativeCasesMatch,
+    representativeCases.map((testCase) => {
+      const caseDist = window.calculateDamageDistribution(testCase.base, testCase.def);
+      return `${testCase.base}/${testCase.def}: total=${caseDist.totalOutcomes}, rows=${caseDist.rows.map((row) => `${row.damage}:${row.count}`).join(',')}`;
+    }).join(' | '),
   );
 
   // 3) Range min/max matches distribution edges.
@@ -108,13 +186,14 @@
     `baseQ16=${window.calculateBaseDamage(0, 20)}, rows=${distAtk0.rows.length}`,
   );
 
-  // 5-extra) Attack 0 is represented as 64 outcomes collapsed into the guaranteed 1 damage.
+  // 5-extra) Attack 0 follows the same VBA width formula and collapses to guaranteed 1 damage.
   assert(
     '5-extra. attack 0 collapses all random outcomes to minimum damage',
-    distAtk0.totalOutcomes === 64
+    distAtk0.widthQ16 === 0
+      && distAtk0.totalOutcomes === 2
       && distAtk0.rows.length === 1
       && distAtk0.rows[0].damage === 1
-      && distAtk0.rows[0].count === 64,
+      && distAtk0.rows[0].count === 2,
     `rows=${distAtk0.rows.map((row) => `${row.damage}:${row.count}`).join(',')}, total=${distAtk0.totalOutcomes}`,
   );
 
@@ -128,12 +207,23 @@
     `p1=${p1}, p2=${p2}`,
   );
 
-  // 6-extra) Kill probability uses the same one-attack distribution rows.
-  // For the baseline, HP 30 is killed by 30 damage (10 ways) or 31 damage (4 ways).
+  // 6-extra) Kill probability uses the same VBA one-attack distribution rows.
+  // For the baseline, HP 30 is killed by 30 damage or 31 damage.
   assert(
-    '6-extra. kill probability uses exact single-attack distribution',
-    p1 === 14 / 64,
-    `p1=${p1}, expected=${14 / 64}`,
+    '6-extra. kill probability uses VBA single-attack distribution',
+    approxEqual(p1, (65536 + 35356) / 459328),
+    `p1=${p1}, expected=${(65536 + 35356) / 459328}`,
+  );
+
+  // 6-extra-b) Tail probabilities are exposed with VBA semantics.
+  // tailProbGte is P(total damage >= row.damage), tailProbGt is P(total damage > row.damage).
+  const row30 = dist.rows.find((row) => row.damage === 30);
+  assert(
+    '6-extra-b. tail probabilities match VBA semantics',
+    row30
+      && approxEqual(row30.tailProbGte, (65536 + 35356) / 459328)
+      && approxEqual(row30.tailProbGt, 35356 / 459328),
+    `row30.tailGte=${row30?.tailProbGte}, row30.tailGt=${row30?.tailProbGt}`,
   );
 
   // Extra: required public API functions are exposed.

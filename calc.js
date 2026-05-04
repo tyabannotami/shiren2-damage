@@ -88,42 +88,109 @@
     return Math.trunc((shieldPower + chiSealCount) / 2);
   }
 
-  /**
-   * 64通りの乱数 224..287 をすべて列挙して1回攻撃の分布を作る。
-   * 倒確率はこの rows を畳み込むため、ここが受ダメ/与ダメ共通の正確な単発分布になる。
-   */
-  function buildDistributionFromBaseQ16(baseQ16) {
-    const totalOutcomes = 64;
-    const counts = new Map();
-    let damageSum = 0;
+  function countIntegersInRange(start, end) {
+    if (end < start) return 0;
+    return end - start + 1;
+  }
 
-    for (let random = 224; random <= 287; random += 1) {
-      // baseQ16 はすでに65536倍なので、乱数補正の /256 とQ16解除の /65536 を同時に行う。
-      const rawDamage = Math.floor((baseQ16 * random) / (256 * Q16));
-      const damage = Math.max(1, rawDamage);
-      counts.set(damage, (counts.get(damage) ?? 0) + 1);
-      damageSum += damage;
+  function countRawDamageInVbaBranch(avgQ16, widthQ16, rawDamage, sign) {
+    // VBA版 DamageDist_Build は m=0..widthQ16 を両端含みで走査し、
+    // avgQ16 - m と avgQ16 + m の両方をカウントする。
+    // ここでは総当たりせず、floor(dmgQ16 / Q16) が rawDamage になる m の範囲を
+    // 整数区間として数える。結果はVBAの1件ずつ加算する処理と一致する。
+    const q16Start = rawDamage * Q16;
+    const q16End = ((rawDamage + 1) * Q16) - 1;
+    let minM;
+    let maxM;
+
+    if (sign < 0) {
+      // avgQ16 - m が [q16Start, q16End] に入る m を数える。
+      minM = avgQ16 - q16End;
+      maxM = avgQ16 - q16Start;
+    } else {
+      // avgQ16 + m が [q16Start, q16End] に入る m を数える。
+      minM = q16Start - avgQ16;
+      maxM = q16End - avgQ16;
     }
 
-    const rows = [...counts.entries()]
-      .map(([damage, count]) => ({ damage, count }))
-      .sort((a, b) => a.damage - b.damage);
+    const clampedStart = Math.max(0, minM);
+    const clampedEnd = Math.min(widthQ16, maxM);
+    return countIntegersInRange(clampedStart, clampedEnd);
+  }
+
+  function countDisplayedDamageInVbaDistribution(avgQ16, widthQ16, damage) {
+    // VBA版では dmg = 0 の場合だけ 1 に補正する。
+    // そのため表示上の1ダメージには raw damage 0 と 1 の両方が集約される。
+    const rawDamages = damage === 1 ? [0, 1] : [damage];
+    let count = 0;
+
+    for (const rawDamage of rawDamages) {
+      count += countRawDamageInVbaBranch(avgQ16, widthQ16, rawDamage, -1);
+      count += countRawDamageInVbaBranch(avgQ16, widthQ16, rawDamage, 1);
+    }
+
+    return count;
+  }
+
+  /**
+   * VBA版 DamageDist_Build 相当の分布を作る。
+   *
+   * 対応するVBA仕様:
+   *   avgQ16 = ApplyDefense_Q16(base, def)
+   *   widthQ16 = avgQ16 \ 8
+   *   For m = 0 To widthQ16
+   *     avgQ16 - m と avgQ16 + m を両方カウント
+   *   total = 2 * (widthQ16 + 1)
+   *
+   * 旧実装の 224..287/256 の64通り乱数列挙は使わない。
+   * totalOutcomes は入力値に応じて変わり、64固定ではない。
+   */
+  function buildDistributionFromBaseQ16(baseQ16) {
+    const avgQ16 = baseQ16;
+    const widthQ16 = Math.trunc(avgQ16 / 8);
+    const totalOutcomes = 2 * (widthQ16 + 1);
+    const minRawDamage = Math.trunc((avgQ16 - widthQ16) / Q16);
+    const maxRawDamage = Math.trunc((avgQ16 + widthQ16) / Q16);
+    const minDisplayedDamage = Math.max(1, minRawDamage);
+    const maxDisplayedDamage = Math.max(1, maxRawDamage);
+    const rows = [];
+    let damageSum = 0;
+
+    for (let damage = minDisplayedDamage; damage <= maxDisplayedDamage; damage += 1) {
+      const count = countDisplayedDamageInVbaDistribution(avgQ16, widthQ16, damage);
+      if (count <= 0) continue;
+      damageSum += damage * count;
+      rows.push({ damage, count });
+    }
 
     let cumulative = 0;
+    const rowsWithProb = rows.map((row) => {
+      const prob = row.count / totalOutcomes;
+      cumulative += prob;
+      return {
+        damage: row.damage,
+        count: row.count,
+        prob,
+        percent: prob * 100,
+        cumProb: cumulative,
+      };
+    });
+
+    let tailProbGte = 0;
+    for (let i = rowsWithProb.length - 1; i >= 0; i -= 1) {
+      const row = rowsWithProb[i];
+      row.tailProbGt = tailProbGte;
+      tailProbGte += row.prob;
+      row.tailProbGte = tailProbGte;
+    }
+
     return {
       baseQ16,
-      avgQ16: Math.round((damageSum * Q16) / totalOutcomes),
+      avgQ16,
+      widthQ16,
+      avgDamageQ16: Math.round((damageSum * Q16) / totalOutcomes),
       totalOutcomes,
-      rows: rows.map((row) => {
-        const prob = row.count / totalOutcomes;
-        cumulative += prob;
-        return {
-          damage: row.damage,
-          count: row.count,
-          prob,
-          cumProb: cumulative,
-        };
-      }),
+      rows: rowsWithProb,
     };
   }
 
@@ -520,7 +587,7 @@
         <td>${row.damage}</td>
         <td>${row.count}</td>
         <td>${formatPercent(row.prob, 1)}</td>
-        <td>${formatPercent(row.cumProb, 1)}</td>
+        <td>${formatPercent(row.tailProbGte, 1)}</td>
       `;
       tbody.appendChild(tr);
     }
