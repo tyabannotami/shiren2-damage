@@ -32,7 +32,7 @@
 
           <div class="field-row">
             <label for="current-hp">現在HP</label>
-            <input id="current-hp" name="currentHp" type="number" min="1" max="999" step="1" value="15" />
+            <input id="current-hp" name="currentHp" type="number" min="1" max="999" step="1" value="100" />
           </div>
 
           <div class="field-row">
@@ -203,9 +203,8 @@
             <thead>
               <tr>
                 <th>ダメージ</th>
-                <th>通り数</th>
                 <th>確率</th>
-                <th>tail(&gt;=)</th>
+                <th>この値以下の確率</th>
               </tr>
             </thead>
             <tbody id="dist-body"></tbody>
@@ -220,9 +219,8 @@
             <thead>
               <tr>
                 <th>ダメージ</th>
-                <th>通り数</th>
                 <th>確率</th>
-                <th>tail(&gt;=)</th>
+                <th>この値以下の確率</th>
               </tr>
             </thead>
             <tbody id="taken-dist-body"></tbody>

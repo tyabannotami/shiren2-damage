@@ -400,7 +400,7 @@
     return value.toFixed(digits);
   }
 
-  function formatPercent(ratio, digits = 1) {
+  function formatPercent(ratio, digits = 3) {
     return `${(ratio * 100).toFixed(digits)}%`;
   }
 
@@ -738,9 +738,8 @@
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${row.damage}</td>
-        <td>${row.count}</td>
-        <td>${formatPercent(row.prob, 1)}</td>
-        <td>${formatPercent(row.tailProbGte, 1)}</td>
+        <td>${formatPercent(row.prob)}</td>
+        <td>${formatPercent(row.cumProb)}</td>
       `;
       tbody.appendChild(tr);
     }
@@ -857,7 +856,7 @@
       const probability = Number.isInteger(targetHp) && targetHp > 0
         ? calculateKillProbability(combatResult.dealt.distribution, targetHp, attackCount)
         : null;
-      const probabilityText = probability === null ? '-' : formatPercent(probability, 1);
+      const probabilityText = probability === null ? '-' : formatPercent(probability);
       const percent = Math.max(0, Math.min(100, probability * 100));
       const row = document.createElement('div');
       row.className = 'rate-row';
