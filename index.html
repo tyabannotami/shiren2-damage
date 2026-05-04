@@ -155,43 +155,104 @@
 
     <section class="panel" id="result-panel" hidden>
       <h2>計算結果</h2>
-      <dl class="summary">
-        <dt>計算に使う攻撃力</dt>
-        <dd id="used-attack"></dd>
-        <dt>計算に使う守備力</dt>
-        <dd id="used-defense"></dd>
-        <dt>平均</dt>
-        <dd id="avg"></dd>
-        <dt>最小 / 最大</dt>
-        <dd id="minmax"></dd>
-      </dl>
-
-      <section class="result-block" id="taken-result-block" hidden>
-        <h3>被ダメージ</h3>
-        <dl class="summary">
-          <dt>モンスター攻撃力</dt>
-          <dd id="taken-used-attack"></dd>
-          <dt>プレイヤー守備力</dt>
-          <dd id="taken-used-defense"></dd>
-          <dt>平均</dt>
-          <dd id="taken-avg"></dd>
-          <dt>最小 / 最大</dt>
-          <dd id="taken-minmax"></dd>
+      <section class="judgement-card" id="judgement-card">
+        <div>
+          <p class="result-label">判定</p>
+          <p class="judgement-text" id="safety-label">-</p>
+        </div>
+        <dl class="metric-grid">
+          <div>
+            <dt>現在HP</dt>
+            <dd id="summary-current-hp">-</dd>
+          </div>
+          <div>
+            <dt>被ダメージ</dt>
+            <dd id="summary-taken-range">-</dd>
+          </div>
+          <div>
+            <dt>最大乱数でも1発耐えるか</dt>
+            <dd id="summary-survive-max">-</dd>
+          </div>
+          <div>
+            <dt>次の一撃で死亡ありか</dt>
+            <dd id="summary-death-risk">-</dd>
+          </div>
         </dl>
+        <p class="sub-note">この判定は1発被弾に対する簡易判定です。自動回復や複数ターンの行動順は含めません。</p>
       </section>
 
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>ダメージ</th>
-              <th>確率</th>
-              <th>累積</th>
-            </tr>
-          </thead>
-          <tbody id="dist-body"></tbody>
-        </table>
+      <div class="result-card-grid">
+        <section class="result-card">
+          <h3>与ダメージ</h3>
+          <p class="big-number" id="dealt-range">-</p>
+          <p class="result-emphasis" id="kill-hit-summary">-</p>
+          <dl class="summary compact-summary">
+            <dt>計算に使う攻撃力</dt>
+            <dd id="used-attack"></dd>
+            <dt>モンスター守備力</dt>
+            <dd id="used-defense"></dd>
+            <dt>平均</dt>
+            <dd id="avg"></dd>
+            <dt>最小 / 最大</dt>
+            <dd id="minmax"></dd>
+          </dl>
+          <div class="rate-list" id="kill-rate-list"></div>
+        </section>
+
+        <section class="result-card" id="taken-result-block" hidden>
+          <h3>被ダメージ</h3>
+          <p class="big-number" id="taken-range">-</p>
+          <p class="result-emphasis" id="survival-summary">-</p>
+          <dl class="summary compact-summary">
+            <dt>モンスター攻撃力</dt>
+            <dd id="taken-used-attack"></dd>
+            <dt>プレイヤー守備力</dt>
+            <dd id="taken-used-defense"></dd>
+            <dt>平均</dt>
+            <dd id="taken-avg"></dd>
+            <dt>最小 / 最大</dt>
+            <dd id="taken-minmax"></dd>
+            <dt>最大被ダメージ基準</dt>
+            <dd id="survive-by-max"></dd>
+            <dt>最小被ダメージ基準</dt>
+            <dd id="survive-by-min"></dd>
+          </dl>
+        </section>
       </div>
+
+      <details class="distribution-details">
+        <summary>与ダメージ分布</summary>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ダメージ</th>
+                <th>通り数</th>
+                <th>確率</th>
+                <th>累積</th>
+              </tr>
+            </thead>
+            <tbody id="dist-body"></tbody>
+          </table>
+        </div>
+      </details>
+
+      <details class="distribution-details" id="taken-distribution-details" hidden>
+        <summary>被ダメージ分布</summary>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ダメージ</th>
+                <th>通り数</th>
+                <th>確率</th>
+                <th>累積</th>
+              </tr>
+            </thead>
+            <tbody id="taken-dist-body"></tbody>
+          </table>
+        </div>
+      </details>
     </section>
   </main>
 
