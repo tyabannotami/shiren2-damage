@@ -498,26 +498,32 @@
   function renderResult(result) {
     const avgElem = document.getElementById('avg');
     const minMaxElem = document.getElementById('minmax');
-    const tbody = document.getElementById('dist-body');
 
     const minDamage = result.rows[0]?.damage ?? 1;
     const maxDamage = result.rows[result.rows.length - 1]?.damage ?? 1;
 
     avgElem.textContent = `${formatFixed(result.avgQ16 / Q16, 2)} `;
     minMaxElem.textContent = `${minDamage} / ${maxDamage}`;
+    renderDistributionRows('dist-body', result);
+
+    document.getElementById('result-panel').hidden = false;
+  }
+
+  function renderDistributionRows(tbodyId, distribution) {
+    const tbody = document.getElementById(tbodyId);
+    if (!tbody) return;
 
     tbody.innerHTML = '';
-    for (const row of result.rows) {
+    for (const row of distribution.rows) {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${row.damage}</td>
+        <td>${row.count}</td>
         <td>${formatPercent(row.prob, 1)}</td>
         <td>${formatPercent(row.cumProb, 1)}</td>
       `;
       tbody.appendChild(tr);
     }
-
-    document.getElementById('result-panel').hidden = false;
   }
 
   function setTextIfExists(id, text) {
@@ -525,11 +531,169 @@
     if (elem) elem.textContent = text;
   }
 
+  function setHiddenIfExists(id, hidden) {
+    const elem = document.getElementById(id);
+    if (elem) elem.hidden = hidden;
+  }
+
+  function getDamageRange(distribution) {
+    return {
+      minDamage: distribution.rows[0]?.damage ?? 1,
+      maxDamage: distribution.rows[distribution.rows.length - 1]?.damage ?? 1,
+    };
+  }
+
+  function formatDamageRange(distribution) {
+    const { minDamage, maxDamage } = getDamageRange(distribution);
+    return `${minDamage}〜${maxDamage}`;
+  }
+
+  function calculateHitCountToReachHp(targetHp, damagePerHit) {
+    if (!Number.isInteger(targetHp) || targetHp <= 0) return null;
+    if (!Number.isInteger(damagePerHit) || damagePerHit <= 0) return null;
+
+    return Math.max(1, Math.ceil(targetHp / damagePerHit));
+  }
+
+  function calculateSurvivableHits(hp, damagePerHit) {
+    // HPが0以下になった時点で死亡なので、死亡する一撃の直前までを「耐えられる回数」とする。
+    const deathHitCount = calculateHitCountToReachHp(hp, damagePerHit);
+    return deathHitCount === null ? null : Math.max(0, deathHitCount - 1);
+  }
+
+  function buildSafetySummary(hp, takenDistribution) {
+    if (!Number.isInteger(hp) || hp <= 0 || !takenDistribution) return null;
+
+    const { minDamage, maxDamage } = getDamageRange(takenDistribution);
+    let status = '安全';
+    let className = 'is-safe';
+
+    if (hp <= minDamage) {
+      status = '死亡';
+      className = 'is-dead';
+    } else if (hp <= maxDamage) {
+      status = '危険';
+      className = 'is-danger';
+    }
+
+    return {
+      status,
+      className,
+      hp,
+      minDamage,
+      maxDamage,
+      survivesMaxHit: hp > maxDamage,
+      hasDeathRiskNextHit: hp <= maxDamage,
+    };
+  }
+
+  function renderSafetySummary(combatResult) {
+    const card = document.getElementById('judgement-card');
+    const summary = buildSafetySummary(
+      combatResult.extendedInputs.player.currentHp,
+      combatResult.taken?.distribution,
+    );
+
+    if (card) {
+      card.classList.remove('is-safe', 'is-danger', 'is-dead');
+      if (summary) card.classList.add(summary.className);
+    }
+
+    if (!summary) {
+      setTextIfExists('safety-label', '-');
+      setTextIfExists('summary-current-hp', '-');
+      setTextIfExists('summary-taken-range', '-');
+      setTextIfExists('summary-survive-max', '-');
+      setTextIfExists('summary-death-risk', '-');
+      return;
+    }
+
+    setTextIfExists('safety-label', summary.status);
+    setTextIfExists('summary-current-hp', `${summary.hp}`);
+    setTextIfExists('summary-taken-range', `${summary.minDamage}〜${summary.maxDamage}`);
+    setTextIfExists('summary-survive-max', summary.survivesMaxHit ? '耐える' : '耐えない');
+    setTextIfExists('summary-death-risk', summary.hasDeathRiskNextHit ? 'あり' : 'なし');
+  }
+
+  function renderKillSummary(combatResult) {
+    const targetHp = combatResult.extendedInputs.monster.hp;
+    const { minDamage, maxDamage } = getDamageRange(combatResult.dealt.distribution);
+    const shortest = calculateHitCountToReachHp(targetHp, maxDamage);
+    const guaranteed = calculateHitCountToReachHp(targetHp, minDamage);
+
+    setTextIfExists('dealt-range', formatDamageRange(combatResult.dealt.distribution));
+
+    if (shortest === null || guaranteed === null) {
+      setTextIfExists('kill-hit-summary', 'モンスターHPを入力してください');
+    } else {
+      setTextIfExists('kill-hit-summary', `最短${shortest}発 / 確定${guaranteed}発`);
+    }
+
+    const list = document.getElementById('kill-rate-list');
+    if (!list) return;
+
+    list.innerHTML = '';
+    for (let attackCount = 1; attackCount <= 6; attackCount += 1) {
+      const probability = Number.isInteger(targetHp) && targetHp > 0
+        ? calculateKillProbability(combatResult.dealt.distribution, targetHp, attackCount)
+        : null;
+      const probabilityText = probability === null ? '-' : formatPercent(probability, 1);
+      const percent = Math.max(0, Math.min(100, probability * 100));
+      const row = document.createElement('div');
+      row.className = 'rate-row';
+      row.innerHTML = `
+        <strong>${attackCount}発</strong>
+        <div>
+          <span>${attackCount}発撃破率 ${probabilityText}</span>
+          <div class="rate-bar" aria-hidden="true"><span style="width: ${percent}%"></span></div>
+        </div>
+      `;
+      list.appendChild(row);
+    }
+  }
+
+  function renderSurvivalSummary(combatResult) {
+    if (!combatResult.taken) {
+      setHiddenIfExists('taken-result-block', true);
+      setHiddenIfExists('taken-distribution-details', true);
+      return;
+    }
+
+    const hp = combatResult.extendedInputs.player.currentHp;
+    const { minDamage, maxDamage } = getDamageRange(combatResult.taken.distribution);
+    const deathByMax = calculateHitCountToReachHp(hp, maxDamage);
+    const deathByMin = calculateHitCountToReachHp(hp, minDamage);
+    const surviveByMax = calculateSurvivableHits(hp, maxDamage);
+    const surviveByMin = calculateSurvivableHits(hp, minDamage);
+
+    setHiddenIfExists('taken-result-block', false);
+    setHiddenIfExists('taken-distribution-details', false);
+    setTextIfExists('taken-range', formatDamageRange(combatResult.taken.distribution));
+
+    if (deathByMax === null || deathByMin === null) {
+      setTextIfExists('survival-summary', '現在HPを入力してください');
+      setTextIfExists('survive-by-max', '-');
+      setTextIfExists('survive-by-min', '-');
+      return;
+    }
+
+    const maxHitText = deathByMax === 1 ? '最大乱数1発で倒れる' : `最大乱数${deathByMax}発で倒れる`;
+    const firstHitText = surviveByMax >= 1 ? '最大乱数でも1発耐える' : '次の一撃で死亡あり';
+
+    setTextIfExists('survival-summary', `${firstHitText} / ${maxHitText}`);
+    setTextIfExists('survive-by-max', `${surviveByMax}発耐える（${maxHitText}）`);
+    setTextIfExists('survive-by-min', `${surviveByMin}発耐える（最小乱数${deathByMin}発で倒れる）`);
+  }
+
   function renderCombatResult(combatResult) {
     renderResult(combatResult.dealt.distribution);
 
     setTextIfExists('used-attack', `${combatResult.dealt.attack}`);
     setTextIfExists('used-defense', `${combatResult.dealt.defense}`);
+    setTextIfExists('dealt-range', formatDamageRange(combatResult.dealt.distribution));
+    renderKillSummary(combatResult);
+    renderSafetySummary(combatResult);
+    renderSurvivalSummary(combatResult);
 
     const takenBlock = document.getElementById('taken-result-block');
     if (!takenBlock) return;
@@ -547,6 +711,7 @@
     setTextIfExists('taken-used-defense', `${combatResult.taken.defense}`);
     setTextIfExists('taken-avg', `${formatFixed(combatResult.taken.distribution.avgQ16 / Q16, 2)} `);
     setTextIfExists('taken-minmax', `${minDamage} / ${maxDamage}`);
+    renderDistributionRows('taken-dist-body', combatResult.taken.distribution);
   }
 
   function setError(message) {
@@ -580,6 +745,7 @@
           : null;
 
         const combatResult = {
+          extendedInputs,
           inputs: combatInputs,
           dealt: {
             ...combatInputs.dealt,

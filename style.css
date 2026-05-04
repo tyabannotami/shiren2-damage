@@ -100,15 +100,137 @@ input[type="checkbox"] {
   margin: 0;
 }
 
-.result-block {
+.compact-summary {
+  grid-template-columns: 160px 1fr;
+  font-size: 0.95rem;
+}
+
+.judgement-card,
+.result-card {
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.judgement-card {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.judgement-card.is-safe {
+  border-color: #1a7f37;
+  background: #f0fff4;
+}
+
+.judgement-card.is-danger {
+  border-color: #bf8700;
+  background: #fff8c5;
+}
+
+.judgement-card.is-dead {
+  border-color: #cf222e;
+  background: #ffebe9;
+}
+
+.result-label {
+  color: #59636e;
+  font-size: 0.85rem;
+  margin: 0 0 2px;
+}
+
+.judgement-text {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.metric-grid div {
+  background: #fff;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.metric-grid dt {
+  color: #59636e;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.metric-grid dd {
+  font-size: 1.2rem;
+  font-weight: 800;
+  margin: 4px 0 0;
+}
+
+.result-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.result-card h3 {
+  font-size: 1rem;
+  margin: 0 0 10px;
+}
+
+.big-number {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.1;
+  margin: 0 0 6px;
+}
+
+.result-emphasis {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+
+.rate-list {
+  display: grid;
+  gap: 6px;
+}
+
+.rate-row {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.rate-bar {
+  background: #d0d7de;
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.rate-bar span {
+  background: #0969da;
+  display: block;
+  height: 100%;
+}
+
+.distribution-details {
   border-top: 1px solid #d0d7de;
-  margin-top: 12px;
+  margin-top: 14px;
   padding-top: 12px;
 }
 
-.result-block h3 {
-  font-size: 1rem;
-  margin: 0 0 10px;
+.distribution-details summary {
+  cursor: pointer;
+  font-weight: 700;
+  margin-bottom: 10px;
 }
 
 .note {
@@ -159,5 +281,20 @@ th {
 
   .form-grid button {
     width: 100%;
+  }
+
+  .metric-grid,
+  .result-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .compact-summary,
+  .summary {
+    grid-template-columns: 1fr;
+  }
+
+  .big-number,
+  .judgement-text {
+    font-size: 1.7rem;
   }
 }
