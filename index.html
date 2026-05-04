@@ -12,11 +12,140 @@
 
     <section class="panel">
       <form id="calc-form" class="form-grid">
-        <label for="base">攻撃力</label>
-        <input id="base" name="base" type="number" min="0" max="9999" step="1" required value="50" />
+        <!--
+          既存の正確式計算は、引き続きこの攻撃力・守備力を直接使う。
+          追加した実プレイ向け入力は、現時点では値取得のみ行い、計算式には反映しない。
+        -->
+        <fieldset class="form-section">
+          <legend>直接入力</legend>
 
-        <label for="def">守備力</label>
-        <input id="def" name="def" type="number" min="0" max="9999" step="1" required value="20" />
+          <div class="field-row">
+            <label for="base">攻撃力</label>
+            <input id="base" name="base" type="number" min="0" max="9999" step="1" required value="50" />
+          </div>
+
+          <div class="field-row">
+            <label for="def">守備力</label>
+            <input id="def" name="def" type="number" min="0" max="9999" step="1" required value="20" />
+          </div>
+        </fieldset>
+
+        <!--
+          docs/shiren2_damage_ui_design.md の入力項目に合わせた拡張欄。
+          TODO: レベル、武器の強さ、ちからから算出した攻撃力を、既存の base 入力へ反映できるようにする。
+        -->
+        <fieldset class="form-section">
+          <legend>シレン</legend>
+
+          <div class="field-row">
+            <label for="level">レベル</label>
+            <input id="level" name="level" type="number" min="1" max="99" step="1" value="24" />
+          </div>
+
+          <div class="field-row">
+            <label for="weapon-strength">武器の強さ</label>
+            <input id="weapon-strength" name="weaponStrength" type="number" min="0" max="999" step="1" value="0" />
+          </div>
+
+          <div class="field-row">
+            <label for="power">ちから</label>
+            <input id="power" name="power" type="number" min="0" max="99" step="1" value="8" />
+          </div>
+
+          <div class="field-row">
+            <label for="current-hp">現在HP</label>
+            <input id="current-hp" name="currentHp" type="number" min="1" max="999" step="1" value="15" />
+          </div>
+
+          <div class="field-row">
+            <label for="shield-strength">盾の強さ</label>
+            <input id="shield-strength" name="shieldStrength" type="number" min="0" max="999" step="1" value="40" />
+          </div>
+        </fieldset>
+
+        <!--
+          武器印は個数で効果量が変わるため、オン/オフではなく数値入力にする。
+          TODO: モンスター種別と照合して、該当する印だけを与ダメージへ反映する。
+        -->
+        <fieldset class="form-section">
+          <legend>武器印</legend>
+
+          <div class="seal-grid">
+            <label for="weapon-seal-butsu">仏</label>
+            <input id="weapon-seal-butsu" name="weaponSealButsu" type="number" min="0" max="17" step="1" value="0" />
+
+            <label for="weapon-seal-me">目</label>
+            <input id="weapon-seal-me" name="weaponSealMe" type="number" min="0" max="17" step="1" value="0" />
+
+            <label for="weapon-seal-tsuki">月</label>
+            <input id="weapon-seal-tsuki" name="weaponSealTsuki" type="number" min="0" max="17" step="1" value="0" />
+
+            <label for="weapon-seal-ryu">竜</label>
+            <input id="weapon-seal-ryu" name="weaponSealRyu" type="number" min="0" max="16" step="1" value="0" />
+
+            <label for="weapon-seal-do">ド</label>
+            <input id="weapon-seal-do" name="weaponSealDo" type="number" min="0" max="17" step="1" value="0" />
+
+            <label for="weapon-seal-ryu-alt">龍</label>
+            <input id="weapon-seal-ryu-alt" name="weaponSealRyuAlt" type="number" min="0" max="17" step="1" value="0" />
+          </div>
+
+          <label class="check-row" for="critical-hit">
+            <input id="critical-hit" name="criticalHit" type="checkbox" />
+            会心の一撃（会印・1.5倍）
+          </label>
+        </fieldset>
+
+        <!--
+          盾印は現時点では「ち」印のみ。
+          TODO: 盾の強さと「ち」印から算出した守備力を、既存の def 入力へ反映できるようにする。
+        -->
+        <fieldset class="form-section">
+          <legend>盾印</legend>
+
+          <div class="field-row">
+            <label for="shield-seal-chi">ち印</label>
+            <input id="shield-seal-chi" name="shieldSealChi" type="number" min="0" max="99" step="1" value="0" />
+          </div>
+        </fieldset>
+
+        <!--
+          CSVから候補を読み込み、選択時にHP・攻撃力・守備力を反映する。
+          読み込みに失敗しても、下の数値欄へ直接入力して計算できる。
+        -->
+        <fieldset class="form-section">
+          <legend>モンスター</legend>
+
+          <div class="field-row">
+            <label for="monster-name">モンスター名</label>
+            <input id="monster-name" name="monsterName" type="text" list="monster-name-list" placeholder="例: マムル" />
+            <datalist id="monster-name-list"></datalist>
+          </div>
+
+          <div class="field-row">
+            <label for="monster-select">モンスター選択</label>
+            <select id="monster-select" name="monsterSelect">
+              <option value="">未選択</option>
+            </select>
+          </div>
+
+          <div class="field-row">
+            <label for="monster-hp">モンスターHP</label>
+            <input id="monster-hp" name="monsterHp" type="number" min="1" max="9999" step="1" value="30" />
+          </div>
+
+          <div class="field-row">
+            <label for="monster-attack">モンスター攻撃力</label>
+            <input id="monster-attack" name="monsterAttack" type="number" min="0" max="9999" step="1" value="50" />
+          </div>
+
+          <div class="field-row">
+            <label for="monster-defense">モンスター守備力</label>
+            <input id="monster-defense" name="monsterDefense" type="number" min="0" max="9999" step="1" value="20" />
+          </div>
+
+          <p class="sub-note" id="monster-data-note">モンスターデータ未読み込みでも、数値を直接入力できます。</p>
+        </fieldset>
 
         <button type="submit">計算</button>
       </form>
@@ -27,11 +156,29 @@
     <section class="panel" id="result-panel" hidden>
       <h2>計算結果</h2>
       <dl class="summary">
+        <dt>計算に使う攻撃力</dt>
+        <dd id="used-attack"></dd>
+        <dt>計算に使う守備力</dt>
+        <dd id="used-defense"></dd>
         <dt>平均</dt>
         <dd id="avg"></dd>
         <dt>最小 / 最大</dt>
         <dd id="minmax"></dd>
       </dl>
+
+      <section class="result-block" id="taken-result-block" hidden>
+        <h3>被ダメージ</h3>
+        <dl class="summary">
+          <dt>モンスター攻撃力</dt>
+          <dd id="taken-used-attack"></dd>
+          <dt>プレイヤー守備力</dt>
+          <dd id="taken-used-defense"></dd>
+          <dt>平均</dt>
+          <dd id="taken-avg"></dd>
+          <dt>最小 / 最大</dt>
+          <dd id="taken-minmax"></dd>
+        </dl>
+      </section>
 
       <div class="table-wrap">
         <table>
